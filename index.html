@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>La viborita competitiva</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-content: center;
+      gap: 12px;
+      background: #111;
+      font-family: system-ui, Arial, sans-serif;
+      color: #fff;
+    }
+    #hud { font-size: 18px; text-align: center; }
+    canvas { border: 2px solid #fff; background: #000; }
+  </style>
+</head>
+<body>
+  <div><span>Yanila Soliz</span></div>
+  <div id="hud">
+    Puntuación P1: <span id="score1">0</span> |
+    Puntuación P2: <span id="score2">0</span> |
+    Vidas: <span id="lives">3</span>
+  </div>
+
+  <!-- Marco de juego -->
+  <canvas id="game" width="600" height="600"></canvas>
+
+  <script>
+    // --- Variables principales ---
+    let lives = 5;
+    let speed = 200; // velocidad inicial en ms
+    let timer;
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const score1El = document.getElementById('score1');
+    const score2El = document.getElementById('score2');
+    const livesEl = document.getElementById("lives");
+    livesEl.textContent = lives;
+
+    const box = 40; // tamaño de cada celda (serpiente y comida)
+    const cols = canvas.width / box;
+    const rows = canvas.height / box;
+
+    // --- Sprites (puedes reemplazar por imágenes) ---
+    const bg = new Image();
+    bg.src = 'fondo.png'; // fondo del juego
+    const imgFood = new Image();
+    imgFood.src = 'food.png';
+
+    const imgHead = new Image();
+    imgHead.src = 'player_1.png';
+    const imgBody = new Image();
+    imgBody.src = 'player_body_1.png';
+
+    const imgHead2 = new Image();
+    imgHead2.src = 'player_2.png';
+    const imgBody2 = new Image();
+    imgBody2.src = 'player_body_2.png';
+
+    // --- Jugador 1 ---
+    let snake = [{ x: 9 * box, y: 10 * box }];
+    let direction = 'RIGHT';
+    let score1 = 0;
+
+    // --- Jugador 2 (IA) ---
+    let snake2 = [{ x: 5 * box, y: 5 * box }];
+    let direction2 = 'RIGHT';
+    let score2 = 0;
+
+    // --- Comida ---
+    function placeFood() {
+      let pos;
+      do {
+        pos = {
+          x: Math.floor(Math.random() * cols) * box,
+          y: Math.floor(Math.random() * rows) * box
+        };
+      } while (
+        snake.some(seg => seg.x === pos.x && seg.y === pos.y) ||
+        snake2.some(seg => seg.x === pos.x && seg.y === pos.y)
+      );
+      return pos;
+    }
+    let food = placeFood();
+
+    // --- Controles Jugador 1 ---
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase(); // Para que funcione con mayúsculas/minúsculas
+
+      if (['w','a','s','d'].includes(key)) e.preventDefault();
+
+      if (key === 'w' && direction !== 'DOWN') direction = 'UP';
+      if (key === 's' && direction !== 'UP') direction = 'DOWN';
+      if (key === 'a' && direction !== 'RIGHT') direction = 'LEFT';
+      if (key === 'd' && direction !== 'LEFT') direction = 'RIGHT';
+    });
+
+    // --- IA Jugador 2 ---
+    function aiMove() {
+      let head = snake2[0];
+      if (food.x > head.x && direction2 !== 'LEFT') direction2 = 'RIGHT';
+      else if (food.x < head.x && direction2 !== 'RIGHT') direction2 = 'LEFT';
+      else if (food.y > head.y && direction2 !== 'UP') direction2 = 'DOWN';
+      else if (food.y < head.y && direction2 !== 'DOWN') direction2 = 'UP';
+    }
+
+    // --- Actualizar serpiente ---
+    function updateSnake(snakeArr, dir, player) {
+      let head = snakeArr[0];
+      let nx = head.x;
+      let ny = head.y;
+      if (dir === 'LEFT')  nx -= box;
+      if (dir === 'RIGHT') nx += box;
+      if (dir === 'UP')    ny -= box;
+      if (dir === 'DOWN')  ny += box;
+
+      const newHead = { x: nx, y: ny };
+
+      // colisiones con paredes
+      if (nx < 0 || nx >= canvas.width || ny < 0 || ny >= canvas.height) return gameOver(player);
+
+      // colisión consigo mismo
+      for (let i = 1; i < snakeArr.length; i++) {
+        if (snakeArr[i].x === newHead.x && snakeArr[i].y === newHead.y) return gameOver(player);
+      }
+
+      // colisión con la otra serpiente
+      const otherSnake = (player === 1) ? snake2 : snake;
+      for (let seg of otherSnake) {
+        if (seg.x === newHead.x && seg.y === newHead.y) return gameOver(player);
+      }
+
+      // comida
+      const ate = (newHead.x === food.x && newHead.y === food.y);
+      snakeArr.unshift(newHead);
+      if (ate) {
+        if (player === 1) {
+          score1++;
+          score1El.textContent = score1;
+        } else {
+          score2++;
+          score2El.textContent = score2;
+        }
+        food = placeFood();
+        food = placeFood();
+
+        // aumentar velocidad
+        speed = Math.max(50, speed - 10);
+        clearInterval(timer);
+        timer = setInterval(loop, speed);
+      } else {
+        snakeArr.pop();
+      }
+    }
+
+    function update() {
+      aiMove();
+      updateSnake(snake, direction, 1);
+      updateSnake(snake2, direction2, 2);
+    }
+
+    function draw() {
+      // fondo
+      ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+
+      // comida
+      ctx.drawImage(imgFood, food.x, food.y, box, box);
+
+      // Jugador 1
+      for (let i = 0; i < snake.length; i++) {
+        let seg = snake[i];
+        if (i === 0) ctx.drawImage(imgHead, seg.x, seg.y, box, box);
+        else ctx.drawImage(imgBody, seg.x, seg.y, box, box);
+      }
+
+      // Jugador 2
+      for (let i = 0; i < snake2.length; i++) {
+        let seg = snake2[i];
+        if (i === 0) ctx.drawImage(imgHead2, seg.x, seg.y, box, box);
+        else ctx.drawImage(imgBody2, seg.x, seg.y, box, box);
+      }
+    }
+
+    function resetGame() {
+      snake = [{ x: 9 * box, y: 10 * box }];
+      direction = 'RIGHT';
+      snake2 = [{ x: 5 * box, y: 5 * box }];
+      direction2 = 'DOWN';
+      food = placeFood();
+    }
+
+    function loop() {
+      update();
+      draw();
+    }
+
+    function gameOver(player) {
+      lives--;
+      livesEl.textContent = lives;
+
+      if (lives > 0) {
+        alert("⚠️ Has perdido una vida. Intentos restantes: " + lives);
+        resetGame();
+      } else {
+        clearInterval(timer);
+        let winner = (player === 1) ? "Jugador 2 (IA)" : "Jugador 1";
+        alert('Game Over 😵\nGanador: ' + winner +
+              '\nP1: ' + score1 + " | P2: " + score2);
+      }
+    }
+
+    // iniciar juego cuando se cargue la imagen de fondo
+    bg.onload = () => {
+      timer = setInterval(loop, speed);
+    };
+  </script>
+</body>
+</html>
